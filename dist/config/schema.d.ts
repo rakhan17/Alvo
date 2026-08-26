@@ -1,0 +1,45 @@
+import { z } from 'zod';
+export declare const PersonaConfigSchema: z.ZodObject<{
+    name: z.ZodDefault<z.ZodString>;
+    relationship: z.ZodDefault<z.ZodString>;
+    tone: z.ZodDefault<z.ZodString>;
+    language: z.ZodDefault<z.ZodString>;
+    scanIntervalSeconds: z.ZodDefault<z.ZodNumber>;
+    provider: z.ZodDefault<z.ZodEnum<["ollama", "gemini", "openai"]>>;
+    model: z.ZodDefault<z.ZodString>;
+    baseUrl: z.ZodDefault<z.ZodOptional<z.ZodString>>;
+    apiKey: z.ZodOptional<z.ZodString>;
+    enableVision: z.ZodDefault<z.ZodBoolean>;
+    enableActiveWindow: z.ZodDefault<z.ZodBoolean>;
+    sensitivity: z.ZodDefault<z.ZodEnum<["low", "medium", "high"]>>;
+    customInstructions: z.ZodOptional<z.ZodString>;
+}, "strip", z.ZodTypeAny, {
+    name: string;
+    relationship: string;
+    tone: string;
+    language: string;
+    scanIntervalSeconds: number;
+    provider: "ollama" | "gemini" | "openai";
+    model: string;
+    baseUrl: string;
+    enableVision: boolean;
+    enableActiveWindow: boolean;
+    sensitivity: "low" | "medium" | "high";
+    apiKey?: string | undefined;
+    customInstructions?: string | undefined;
+}, {
+    name?: string | undefined;
+    relationship?: string | undefined;
+    tone?: string | undefined;
+    language?: string | undefined;
+    scanIntervalSeconds?: number | undefined;
+    provider?: "ollama" | "gemini" | "openai" | undefined;
+    model?: string | undefined;
+    baseUrl?: string | undefined;
+    apiKey?: string | undefined;
+    enableVision?: boolean | undefined;
+    enableActiveWindow?: boolean | undefined;
+    sensitivity?: "low" | "medium" | "high" | undefined;
+    customInstructions?: string | undefined;
+}>;
+export type ValidatedPersonaConfig = z.infer<typeof PersonaConfigSchema>;

@@ -1,0 +1,46 @@
+{
+  "name": "alvo",
+  "version": "1.0.0",
+  "description": "Autonomous Proactive Terminal Companion AI",
+  "type": "module",
+  "main": "dist/cli.js",
+  "bin": {
+    "alvo": "./bin/alvo.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/cli.ts start",
+    "start": "tsx src/cli.ts start",
+    "doctor": "tsx src/cli.ts doctor",
+    "config": "tsx src/cli.ts config"
+  },
+  "keywords": [
+    "ai",
+    "companion",
+    "terminal",
+    "tui",
+    "proactive",
+    "ollama",
+    "macos"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "chalk": "^5.4.1",
+    "commander": "^13.1.0",
+    "dotenv": "^16.4.7",
+    "figures": "^6.1.0",
+    "ink": "^5.1.0",
+    "ink-spinner": "^5.0.0",
+    "ink-text-input": "^6.0.0",
+    "react": "^18.3.1",
+    "sharp": "^0.33.5",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.5",
+    "@types/react": "^18.3.18",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3"
+  }
+}
