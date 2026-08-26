@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { PERSONAS_150, PersonaRole } from '../data/personas';
-import { X, Users, Search } from 'lucide-react';
+import { X, Users, Search, UserCheck } from 'lucide-react';
 
 interface PersonaModalProps {
   isOpen: boolean;
@@ -102,7 +102,9 @@ export const PersonaModal: React.FC<PersonaModalProps> = ({
                 }`}
               >
                 <div className="flex items-center gap-3 mb-2">
-                  <span className="text-xl p-2 rounded-xl bg-[#0a0a0a] border border-[#262626]">{p.icon}</span>
+                  <div className="p-2 rounded-xl bg-[#0a0a0a] border border-[#262626] text-white">
+                    <UserCheck className="w-4 h-4 text-white" />
+                  </div>
                   <div>
                     <h4 className="font-bold text-xs text-white">
                       {p.name}

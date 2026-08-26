@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { DebateMessage } from '../services/debateEngine';
-import { MessageSquare, Search, Sparkles, ArrowRight } from 'lucide-react';
+import { MessageSquare, Search, Sparkles, ArrowRight, UserCheck } from 'lucide-react';
 
 interface DebateFeedProps {
   entries: DebateMessage[];
@@ -83,7 +83,9 @@ export const DebateFeed: React.FC<DebateFeedProps> = ({ entries }) => {
               {/* Top Meta Line */}
               <div className="flex items-center justify-between gap-2 mb-2">
                 <div className="flex items-center gap-2.5">
-                  <span className="text-base p-1 rounded bg-[#171717] border border-[#262626]">{entry.personaIcon}</span>
+                  <div className="p-1.5 rounded bg-[#171717] border border-[#262626] text-white">
+                    <UserCheck className="w-3.5 h-3.5 text-white" />
+                  </div>
                   <div>
                     <h4 className="font-bold text-xs text-white flex items-center gap-2">
                       {entry.personaName}

@@ -1,7 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { PersonaRole } from '../data/personas';
 import { DebateMessage } from '../services/debateEngine';
-import { ZoomIn, ZoomOut, RefreshCw, Info } from 'lucide-react';
+import { 
+  ZoomIn, ZoomOut, RefreshCw, Info,
+  Stethoscope, Brain, Scale, Gavel, Building2, Shield, Activity, 
+  Pill, HeartPulse, ShieldAlert, Cross, Dna, Briefcase, Users, 
+  Compass, BookOpen, Heart, Moon, FileText
+} from 'lucide-react';
 
 interface Node {
   id: string;
@@ -11,12 +16,14 @@ interface Node {
   vy: number;
   persona: PersonaRole;
   currentStance?: string;
+  clusterTargetX: number;
+  clusterTargetY: number;
 }
 
 interface Link {
   source: string;
   target: string;
-  type: 'Rebuttal' | 'Consensus' | 'Synergy';
+  type: 'Rebuttal' | 'Consensus';
 }
 
 interface SpiderWebGraphProps {
@@ -35,28 +42,44 @@ export const SpiderWebGraph: React.FC<SpiderWebGraphProps> = ({ activePersonas, 
   const isDraggingRef = useRef(false);
   const dragStartRef = useRef({ x: 0, y: 0 });
 
-  // Initialize node layout in circle
+  // Map Kubu IDs to cluster center coordinates on Canvas
+  const getClusterTarget = (kubuId: string, width: number, height: number) => {
+    const cx = width / 2;
+    const cy = height / 2;
+    const offset = Math.min(width, height) * 0.28;
+
+    switch (kubuId) {
+      case 'kubu_health': return { x: cx - offset, y: cy - offset * 0.7 };
+      case 'kubu_law': return { x: cx + offset, y: cy - offset * 0.7 };
+      case 'kubu_eco': return { x: cx - offset * 1.1, y: cy + offset * 0.7 };
+      case 'kubu_science': return { x: cx + offset * 1.1, y: cy + offset * 0.7 };
+      case 'kubu_society': return { x: cx, y: cy };
+      default: return { x: cx, y: cy };
+    }
+  };
+
+  // Initialize nodes randomly scattered across canvas
   useEffect(() => {
     if (activePersonas.length === 0) return;
 
     const width = 800;
     const height = 550;
-    const centerX = width / 2;
-    const centerY = height / 2;
-    const radius = Math.min(width, height) * 0.38;
 
-    const newNodes: Node[] = activePersonas.map((persona, index) => {
-      const angle = (index / activePersonas.length) * 2 * Math.PI;
+    const newNodes: Node[] = activePersonas.map((persona) => {
+      const target = getClusterTarget(persona.kubuId, width, height);
       const latestMsg = messages.find(m => m.personaId === persona.id);
 
       return {
         id: persona.id,
-        x: centerX + radius * Math.cos(angle),
-        y: centerY + radius * Math.sin(angle),
-        vx: (Math.random() - 0.5) * 0.2,
-        vy: (Math.random() - 0.5) * 0.2,
+        // Start randomly scattered across the entire canvas
+        x: Math.random() * (width - 100) + 50,
+        y: Math.random() * (height - 100) + 50,
+        vx: (Math.random() - 0.5) * 0.5,
+        vy: (Math.random() - 0.5) * 0.5,
         persona,
-        currentStance: latestMsg?.text
+        currentStance: latestMsg?.text,
+        clusterTargetX: target.x,
+        clusterTargetY: target.y
       };
     });
 
@@ -75,7 +98,7 @@ export const SpiderWebGraph: React.FC<SpiderWebGraphProps> = ({ activePersonas, 
         });
       }
     });
-    setLinks(newLinks.slice(0, 50));
+    setLinks(newLinks.slice(0, 60));
   }, [messages]);
 
   // Physics animation loop & Canvas render
@@ -92,40 +115,42 @@ export const SpiderWebGraph: React.FC<SpiderWebGraphProps> = ({ activePersonas, 
       const width = canvas.width = canvas.parentElement?.clientWidth || 800;
       const height = canvas.height = canvas.parentElement?.clientHeight || 550;
 
-      // Physics force adjustments
-      const centerX = width / 2;
-      const centerY = height / 2;
-
       setNodes(prevNodes => {
         return prevNodes.map(node => {
           let fx = 0;
           let fy = 0;
 
-          // Pull towards center
-          fx += (centerX - node.x) * 0.0005;
-          fy += (centerY - node.y) * 0.0005;
+          // Pull towards Kubu Cluster Target (Ideological Gravity)
+          const target = getClusterTarget(node.persona.kubuId, width, height);
+          fx += (target.x - node.x) * 0.008;
+          fy += (target.y - node.y) * 0.008;
 
-          // Node-node repulsion
+          // Node-node repulsion (don't overlap too closely)
           prevNodes.forEach(other => {
             if (other.id !== node.id) {
               const dx = node.x - other.x;
               const dy = node.y - other.y;
               const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-              if (dist < 120) {
-                const force = (120 - dist) / dist * 0.05;
+
+              // Intra-Kubu vs Inter-Kubu forces
+              const sameKubu = node.persona.kubuId === other.persona.kubuId;
+              const minDistance = sameKubu ? 45 : 90;
+
+              if (dist < minDistance) {
+                const force = (minDistance - dist) / dist * (sameKubu ? 0.04 : 0.08);
                 fx += dx * force;
                 fy += dy * force;
               }
             }
           });
 
-          const vx = (node.vx + fx) * 0.88;
-          const vy = (node.vy + fy) * 0.88;
+          const vx = (node.vx + fx) * 0.85;
+          const vy = (node.vy + fy) * 0.85;
 
           return {
             ...node,
-            x: Math.max(40, Math.min(width - 40, node.x + vx)),
-            y: Math.max(40, Math.min(height - 40, node.y + vy)),
+            x: Math.max(30, Math.min(width - 30, node.x + vx)),
+            y: Math.max(30, Math.min(height - 30, node.y + vy)),
             vx,
             vy
           };
@@ -140,16 +165,43 @@ export const SpiderWebGraph: React.FC<SpiderWebGraphProps> = ({ activePersonas, 
       ctx.translate(pan.x, pan.y);
       ctx.scale(scale, scale);
 
-      // Draw Spider-Web Grid Background Lines
-      ctx.strokeStyle = '#171717';
+      // Draw Spider-Web Grid Background
+      ctx.strokeStyle = '#141414';
       ctx.lineWidth = 1;
-      for (let r = 80; r < Math.max(width, height); r += 80) {
+      const step = 60;
+      for (let x = 0; x < width; x += step) {
         ctx.beginPath();
-        ctx.arc(centerX, centerY, r, 0, 2 * Math.PI);
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+        ctx.stroke();
+      }
+      for (let y = 0; y < height; y += step) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(width, y);
         ctx.stroke();
       }
 
-      // Draw Links / Rebuttals (Monochrome subtle white/gray)
+      // Draw Spider-Web Intra-Kubu Cluster Web Lines
+      nodes.forEach((node, idx) => {
+        nodes.slice(idx + 1).forEach(other => {
+          if (node.persona.kubuId === other.persona.kubuId) {
+            const dx = node.x - other.x;
+            const dy = node.y - other.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < 100) {
+              ctx.beginPath();
+              ctx.moveTo(node.x, node.y);
+              ctx.lineTo(other.x, other.y);
+              ctx.strokeStyle = 'rgba(255, 255, 255, 0.07)';
+              ctx.lineWidth = 1;
+              ctx.stroke();
+            }
+          }
+        });
+      });
+
+      // Draw Inter-Kubu Debate Rebuttal Tension Lines
       links.forEach(link => {
         const sourceNode = nodes.find(n => n.id === link.source);
         const targetNode = nodes.find(n => n.id === link.target);
@@ -159,9 +211,9 @@ export const SpiderWebGraph: React.FC<SpiderWebGraphProps> = ({ activePersonas, 
           ctx.moveTo(sourceNode.x, sourceNode.y);
           ctx.lineTo(targetNode.x, targetNode.y);
 
-          ctx.strokeStyle = '#525252';
-          ctx.lineWidth = 1.2;
-          ctx.setLineDash([4, 4]);
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([3, 3]);
           ctx.stroke();
           ctx.setLineDash([]);
         }
@@ -170,11 +222,11 @@ export const SpiderWebGraph: React.FC<SpiderWebGraphProps> = ({ activePersonas, 
       // Draw Persona Nodes
       nodes.forEach(node => {
         const isHovered = hoveredNode?.id === node.id;
-        const radius = isHovered ? 16 : 12;
+        const radius = isHovered ? 14 : 10;
 
         // Node Circle Outer Ring
         ctx.beginPath();
-        ctx.arc(node.x, node.y, radius + 3, 0, 2 * Math.PI);
+        ctx.arc(node.x, node.y, radius + 2, 0, 2 * Math.PI);
         ctx.fillStyle = isHovered ? '#ffffff' : '#262626';
         ctx.fill();
 
@@ -184,16 +236,16 @@ export const SpiderWebGraph: React.FC<SpiderWebGraphProps> = ({ activePersonas, 
         ctx.fillStyle = isHovered ? '#000000' : '#141414';
         ctx.fill();
 
-        // Node Icon / Symbol
-        ctx.font = `${isHovered ? '14px' : '11px'} sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(node.persona.icon, node.x, node.y);
+        // Node Label Dot Symbol
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, 3, 0, 2 * Math.PI);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
 
-        // Node Name Label below
-        ctx.font = '10px Fira Code, monospace';
-        ctx.fillStyle = isHovered ? '#ffffff' : '#a3a3a3';
-        ctx.fillText(node.persona.name.split(' ')[0], node.x, node.y + radius + 12);
+        // Node Name Label
+        ctx.font = '9px Fira Code, monospace';
+        ctx.fillStyle = isHovered ? '#ffffff' : '#737373';
+        ctx.fillText(node.persona.name.split(' ')[0], node.x, node.y + radius + 10);
       });
 
       ctx.restore();
@@ -229,7 +281,7 @@ export const SpiderWebGraph: React.FC<SpiderWebGraphProps> = ({ activePersonas, 
     const found = nodes.find(n => {
       const dx = n.x - mouseX;
       const dy = n.y - mouseY;
-      return Math.sqrt(dx * dx + dy * dy) < 18;
+      return Math.sqrt(dx * dx + dy * dy) < 16;
     });
 
     setHoveredNode(found || null);
@@ -248,12 +300,12 @@ export const SpiderWebGraph: React.FC<SpiderWebGraphProps> = ({ activePersonas, 
     <div className="relative w-full h-[480px] md:h-[550px] bg-[#141414] border border-[#262626] rounded-2xl overflow-hidden shadow-xl">
       
       {/* Header Legend */}
-      <div className="absolute top-4 left-4 z-10 flex items-center gap-3 bg-[#0a0a0a]/90 backdrop-blur-md px-3.5 py-2 rounded-xl border border-[#262626] text-xs">
-        <span className="text-neutral-400 font-mono flex items-center gap-1.5">
-          <Info className="w-3.5 h-3.5 text-white" /> Network Visualizer:
+      <div className="absolute top-4 left-4 z-10 flex items-center gap-3 bg-[#0a0a0a]/90 backdrop-blur-md px-3.5 py-2 rounded-xl border border-[#262626] text-xs font-mono">
+        <span className="text-neutral-400 flex items-center gap-1.5">
+          <Info className="w-3.5 h-3.5 text-white" /> Kubu Clusters:
         </span>
-        <span className="text-neutral-300 font-mono">
-          {activePersonas.length} Active Nodes
+        <span className="text-white">
+          {activePersonas.length} Roles forming 5 Kubu Alliances
         </span>
       </div>
 
@@ -296,7 +348,9 @@ export const SpiderWebGraph: React.FC<SpiderWebGraphProps> = ({ activePersonas, 
       {hoveredNode && (
         <div className="absolute bottom-4 left-4 right-4 md:right-auto md:max-w-md z-20 bg-[#0a0a0a]/95 backdrop-blur-xl border border-[#333333] p-4 rounded-xl shadow-2xl animate-in fade-in duration-150">
           <div className="flex items-center gap-3 mb-2">
-            <span className="text-xl p-1.5 rounded bg-[#171717] border border-[#262626]">{hoveredNode.persona.icon}</span>
+            <div className="p-2 rounded bg-[#171717] border border-[#262626] text-white">
+              <Stethoscope className="w-4 h-4" />
+            </div>
             <div>
               <h4 className="font-bold text-xs text-white">
                 {hoveredNode.persona.name}
@@ -305,7 +359,7 @@ export const SpiderWebGraph: React.FC<SpiderWebGraphProps> = ({ activePersonas, 
             </div>
           </div>
           {hoveredNode.currentStance && (
-            <p className="text-xs text-neutral-300 italic bg-[#141414] p-2.5 rounded border border-[#262626] line-clamp-3">
+            <p className="text-xs text-neutral-300 italic bg-[#141414] p-2.5 rounded border border-[#262626] line-clamp-3 font-sans">
               "{hoveredNode.currentStance}"
             </p>
           )}

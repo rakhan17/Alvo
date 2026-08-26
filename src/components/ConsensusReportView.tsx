@@ -1,6 +1,6 @@
 import React from 'react';
 import { ConsensusReport } from '../services/debateEngine';
-import { Award, Download, FileText, CheckCircle2, ShieldAlert, Sparkles } from 'lucide-react';
+import { Award, Download, FileText, CheckCircle2, ShieldAlert, Sparkles, Scale, Filter } from 'lucide-react';
 
 interface ConsensusReportViewProps {
   report: ConsensusReport;
@@ -13,6 +13,14 @@ export const ConsensusReportView: React.FC<ConsensusReportViewProps> = ({ report
 **Topic:** ${report.topic}  
 **Participating Council:** ${report.participatingCount} AI Personas Across All Societal Spheres  
 **Consensus Score:** ${report.consensusScore}%  
+**Winning Kubu Alliance:** ${report.refereeEvaluation?.winningKubu || 'Kubu Health & Law Alliance'}
+
+---
+
+## Referee AI (Wasit AI) Evaluation & Filtering
+**Reasoning:** ${report.refereeEvaluation?.reasoning}  
+**Filtered Out Arguments:**  
+${report.refereeEvaluation?.filteredOutArguments.map(a => `- ${a}`).join('\n')}
 
 ---
 
@@ -70,7 +78,7 @@ ${report.finalVerdict}
           </div>
           <div>
             <h2 className="font-extrabold text-lg text-white font-mono uppercase tracking-wider">
-              SYNTHESIZED CONSENSUS & MASTER RESEARCH REPORT
+              SYNTHESIZED CONSENSUS & REFEREE VERDICT
             </h2>
             <p className="text-xs text-neutral-400 font-mono mt-0.5">
               Topic: "{report.topic}" • Council: {report.participatingCount} AI Debaters
@@ -102,6 +110,35 @@ ${report.finalVerdict}
             </button>
           </div>
         </div>
+      </div>
+
+      {/* WASIT AI (REFEREE EVALUATION) CARD */}
+      <div className="bg-[#0a0a0a] border border-[#333333] p-5 rounded-xl space-y-3">
+        <div className="flex items-center justify-between">
+          <h4 className="flex items-center gap-2 text-xs font-mono font-bold text-white uppercase tracking-wider">
+            <Scale className="w-4 h-4 text-white" /> Referee AI (Wasit AI) Filter & Kubu Winner
+          </h4>
+          <span className="text-[11px] font-mono px-2.5 py-0.5 rounded bg-[#1c1c1c] text-white border border-[#333333]">
+            Winning Alliance: {report.refereeEvaluation?.winningKubu || 'Kubu Health & Law'}
+          </span>
+        </div>
+
+        <p className="text-xs text-neutral-200 leading-relaxed font-sans">
+          <strong>Referee Reasoning:</strong> {report.refereeEvaluation?.reasoning}
+        </p>
+
+        {report.refereeEvaluation?.filteredOutArguments && report.refereeEvaluation.filteredOutArguments.length > 0 && (
+          <div className="pt-2 border-t border-[#262626] text-xs space-y-1">
+            <span className="font-mono text-neutral-400 flex items-center gap-1">
+              <Filter className="w-3.5 h-3.5 text-neutral-400" /> Filtered Out / Rejected Arguments:
+            </span>
+            <ul className="list-disc list-inside text-neutral-400 font-sans pl-2">
+              {report.refereeEvaluation.filteredOutArguments.map((arg, idx) => (
+                <li key={idx}>{arg}</li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
 
       {/* Executive Summary */}
