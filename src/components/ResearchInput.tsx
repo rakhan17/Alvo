@@ -1,38 +1,27 @@
 import React, { useState } from 'react';
-import { Search, Sparkles, Sliders, Zap, Shield, Globe, Terminal } from 'lucide-react';
+import { Search, Zap, Sliders, Sparkles } from 'lucide-react';
 
 interface ResearchInputProps {
-  onStart: (topic: string, councilSize: number) => void;
+  onStartDebate: (topic: string, councilSize: number) => void;
   isBusy: boolean;
 }
 
 const PRESET_TOPICS = [
-  {
-    label: "🌐 Open-Source AGI Governance",
-    query: "Should AGI weights and foundational frontier models be open-sourced globally, or restricted by international regulatory treaties?"
-  },
-  {
-    label: "💰 UBI & Labor Disruption",
-    query: "Is Universal Basic Income (UBI) economically sustainable and sufficient when 40%+ of knowledge work becomes automated?"
-  },
-  {
-    label: "🛡️ Decentralized vs Centralized AI",
-    query: "Will decentralized peer-to-peer AI compute networks defeat centralized tech monopolies in technical performance and privacy?"
-  },
-  {
-    label: "🤖 Autonomous Arms Control",
-    query: "Should lethal autonomous weapon systems (LAWS) be completely banned under international humanitarian laws?"
-  }
+  { label: '🤖 Global AI Governance vs Sovereign Freedom', query: 'Should global society mandate strict international AI controls over national sovereignty?' },
+  { label: '⚖️ Universal Basic Income vs Job Guarantees', query: 'Should nations implement Universal Basic Income or state job guarantees for displaced workers?' },
+  { label: '🌾 Genetically Modified Farming & Food Supply', query: 'Is large-scale GMO farming necessary to feed 10 billion people amidst climate shifts?' },
+  { label: '🏥 Private Healthcare Markets vs Single-Payer', query: 'What is the most ethical and efficient healthcare system model for modern society?' }
 ];
 
-export const ResearchInput: React.FC<ResearchInputProps> = ({ onStart, isBusy }) => {
+export const ResearchInput: React.FC<ResearchInputProps> = ({ onStartDebate, isBusy }) => {
   const [topic, setTopic] = useState('');
-  const [councilSize, setCouncilSize] = useState<number>(15);
+  const [councilSize, setCouncilSize] = useState(50);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!topic.trim() || isBusy) return;
-    onStart(topic, councilSize);
+    if (topic.trim() && !isBusy) {
+      onStartDebate(topic.trim(), councilSize);
+    }
   };
 
   const handleSelectPreset = (presetQuery: string) => {
@@ -40,30 +29,30 @@ export const ResearchInput: React.FC<ResearchInputProps> = ({ onStart, isBusy })
   };
 
   return (
-    <div className="bg-cyber-card/80 backdrop-blur-xl border border-cyber-border rounded-2xl p-4 md:p-6 shadow-[0_0_30px_rgba(0,0,0,0.5)] transition-all">
+    <div className="bg-[#141414] border border-[#262626] rounded-2xl p-5 md:p-6 shadow-xl transition-all">
       <form onSubmit={handleSubmit} className="space-y-4">
         
-        {/* Header Label */}
+        {/* Header Label & Council Size Selector */}
         <div className="flex items-center justify-between">
-          <label className="flex items-center gap-2 text-sm font-semibold text-cyan-300 font-mono tracking-wide">
-            <Terminal className="w-4 h-4 text-cyan-400" />
-            ENTER RESEARCH TOPIC OR HYPOTHESIS FOR 50-AI DEBATERS:
+          <label className="flex items-center gap-2 text-xs font-mono font-semibold text-neutral-300 tracking-wider uppercase">
+            <Sparkles className="w-3.5 h-3.5 text-white" />
+            ENTER HYPOTHESIS OR QUESTION FOR HUMAN PERSPECTIVE COUNCIL:
           </label>
 
           {/* Council Size Selector */}
           <div className="flex items-center gap-2 text-xs">
-            <Sliders className="w-3.5 h-3.5 text-gray-400" />
-            <span className="text-gray-400 font-mono hidden sm:inline">Council Size:</span>
-            <div className="flex bg-[#090b10] border border-cyber-border rounded-lg p-0.5 font-mono">
-              {[5, 15, 30, 50].map((size) => (
+            <Sliders className="w-3.5 h-3.5 text-neutral-400" />
+            <span className="text-neutral-400 font-mono hidden sm:inline">Council Size:</span>
+            <div className="flex bg-[#0a0a0a] border border-[#262626] rounded-lg p-0.5 font-mono">
+              {[15, 50, 100, 150].map((size) => (
                 <button
                   key={size}
                   type="button"
                   onClick={() => setCouncilSize(size)}
-                  className={`px-2 py-0.5 rounded text-xs transition ${
+                  className={`px-2.5 py-0.5 rounded text-xs transition ${
                     councilSize === size
-                      ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40 shadow-[0_0_8px_rgba(0,240,255,0.3)]'
-                      : 'text-gray-400 hover:text-gray-200'
+                      ? 'bg-white text-black font-bold border border-white'
+                      : 'text-neutral-400 hover:text-white'
                   }`}
                 >
                   {size} AI
@@ -80,30 +69,30 @@ export const ResearchInput: React.FC<ResearchInputProps> = ({ onStart, isBusy })
               type="text"
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
-              placeholder="e.g. Should humanity enforce strict carbon caps on AI data centers?"
+              placeholder="e.g. Should human society regulate artificial intelligence as a public utility?"
               disabled={isBusy}
-              className="w-full bg-[#090b10] border border-cyber-border focus:border-cyan-400 rounded-xl px-4 py-3.5 pl-11 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 transition-all font-sans"
+              className="w-full bg-[#0a0a0a] border border-[#262626] focus:border-white rounded-xl px-4 py-3.5 pl-11 text-xs md:text-sm text-neutral-100 placeholder-neutral-500 focus:outline-none transition-all font-sans"
             />
-            <Search className="w-5 h-5 text-gray-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-neutral-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
           </div>
 
           <button
             type="submit"
             disabled={!topic.trim() || isBusy}
-            className={`flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-semibold text-sm transition-all duration-300 shadow-lg ${
+            className={`flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-semibold text-xs md:text-sm transition-all duration-200 ${
               !topic.trim() || isBusy
-                ? 'bg-gray-800 text-gray-500 border border-gray-700 cursor-not-allowed'
-                : 'bg-gradient-to-r from-cyan-500 via-teal-500 to-purple-600 hover:from-cyan-400 hover:to-purple-500 text-white border border-cyan-300/40 shadow-[0_0_25px_rgba(0,240,255,0.4)] hover:scale-[1.02] active:scale-[0.98]'
+                ? 'bg-[#1f1f1f] text-neutral-600 border border-[#262626] cursor-not-allowed'
+                : 'bg-white hover:bg-neutral-200 text-black border border-white font-bold shadow-md hover:scale-[1.01] active:scale-[0.99]'
             }`}
           >
             {isBusy ? (
               <>
-                <Sparkles className="w-4 h-4 animate-spin text-cyan-200" />
+                <Sparkles className="w-4 h-4 animate-spin text-black" />
                 <span>Debating...</span>
               </>
             ) : (
               <>
-                <Zap className="w-4 h-4 text-cyan-200" />
+                <Zap className="w-4 h-4 text-black" />
                 <span>Launch {councilSize}-AI Debate</span>
               </>
             )}
@@ -112,14 +101,14 @@ export const ResearchInput: React.FC<ResearchInputProps> = ({ onStart, isBusy })
 
         {/* Preset Prompt Suggestions */}
         <div className="flex flex-wrap items-center gap-2 pt-1">
-          <span className="text-xs text-gray-400 font-mono">Suggested Research Topics:</span>
+          <span className="text-[11px] text-neutral-400 font-mono">Preset Research Topics:</span>
           {PRESET_TOPICS.map((preset, idx) => (
             <button
               key={idx}
               type="button"
               onClick={() => handleSelectPreset(preset.query)}
               disabled={isBusy}
-              className="text-xs px-2.5 py-1 rounded-md bg-[#090b10] hover:bg-cyber-border/40 border border-cyber-border hover:border-cyan-500/40 text-gray-300 hover:text-cyan-300 transition text-left"
+              className="text-[11px] px-2.5 py-1 rounded-md bg-[#0a0a0a] hover:bg-[#1a1a1a] border border-[#262626] hover:border-neutral-400 text-neutral-300 hover:text-white transition text-left"
             >
               {preset.label}
             </button>

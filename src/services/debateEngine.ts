@@ -1,68 +1,58 @@
-import { PersonaRole, PERSONAS_50 } from '../data/personas';
+import { PERSONAS_150, PersonaRole } from '../data/personas';
 import { apiKeyPool } from './apiPool';
 
-export interface DebateNode {
-  id: string; // Persona ID
-  persona: PersonaRole;
-  currentStance: string;
-  keyArguments: string[];
-  status: 'idle' | 'thinking' | 'speaking' | 'done';
-}
-
-export interface DebateLink {
-  id: string;
-  source: string; // Persona ID
-  target: string; // Persona ID
-  type: 'rebuttal' | 'agreement' | 'inquiry' | 'synergy';
-  summary: string;
-  timestamp: number;
-}
-
-export interface DebateEntry {
+export interface DebateMessage {
   id: string;
   personaId: string;
   personaName: string;
   personaTitle: string;
-  personaColor: string;
   personaIcon: string;
-  phase: 'Opening' | 'Rebuttal' | 'Synthesis';
-  targetPersonaId?: string;
-  targetPersonaName?: string;
-  stanceType: 'Support' | 'Oppose' | 'Nuanced' | 'Synthesis';
+  personaCategory: string;
+  personaColor: string; // Monochrome shade
   text: string;
   timestamp: number;
+  phase: 'Opening Stances' | 'Coalition Debates & Rebuttals' | 'Master Synthesis';
+  targetPersonaId?: string;
+  targetPersonaName?: string;
+  stanceType: 'Support' | 'Oppose' | 'Nuanced';
 }
 
-export interface FinalConsensusReport {
+export interface RiskItem {
+  risk: string;
+  severity: 'High' | 'Medium' | 'Low';
+  mitigation: string;
+}
+
+export interface ConsensusReport {
   topic: string;
-  consensusScore: number; // 0 to 100%
+  consensusScore: number; // 0 - 100
   executiveSummary: string;
   coreAgreements: string[];
   majorFrictionPoints: string[];
-  riskMatrix: { risk: string; severity: 'High' | 'Medium' | 'Low'; mitigation: string }[];
+  riskMatrix: RiskItem[];
   finalVerdict: string;
+  participatingCount: number;
 }
 
 export type DebateStateListener = (state: {
+  isDebating: boolean;
+  currentPhase: string;
   topic: string;
-  phase: 'idle' | 'Phase 1: Opening Stances' | 'Phase 2: Rebuttal & Cross-Examination' | 'Phase 3: Consensus Synthesis' | 'completed';
+  messages: DebateMessage[];
   activePersonas: PersonaRole[];
-  nodes: DebateNode[];
-  links: DebateLink[];
-  feed: DebateEntry[];
-  report: FinalConsensusReport | null;
+  report: ConsensusReport | null;
+  progressPercent: number;
 }) => void;
 
-class DebateEngine {
+class PacedDebateEngine {
+  private isDebating = false;
+  private currentPhase = '';
   private topic = '';
-  private phase: 'idle' | 'Phase 1: Opening Stances' | 'Phase 2: Rebuttal & Cross-Examination' | 'Phase 3: Consensus Synthesis' | 'completed' = 'idle';
-  private selectedPersonas: PersonaRole[] = [];
-  private nodes: DebateNode[] = [];
-  private links: DebateLink[] = [];
-  private feed: DebateEntry[] = [];
-  private report: FinalConsensusReport | null = null;
+  private messages: DebateMessage[] = [];
+  private activePersonas: PersonaRole[] = [];
+  private report: ConsensusReport | null = null;
+  private progressPercent = 0;
   private listeners: Set<DebateStateListener> = new Set();
-  private isAbortRequested = false;
 
   public subscribe(listener: DebateStateListener) {
     this.listeners.add(listener);
@@ -73,350 +63,308 @@ class DebateEngine {
   }
 
   private notify() {
-    const currentState = {
-      topic: this.topic,
-      phase: this.phase,
-      activePersonas: this.selectedPersonas,
-      nodes: this.nodes,
-      links: this.links,
-      feed: this.feed,
-      report: this.report
-    };
-    this.listeners.forEach(fn => fn(currentState));
+    for (const listener of this.listeners) {
+      listener({
+        isDebating: this.isDebating,
+        currentPhase: this.currentPhase,
+        topic: this.topic,
+        messages: [...this.messages],
+        activePersonas: [...this.activePersonas],
+        report: this.report,
+        progressPercent: this.progressPercent
+      });
+    }
   }
 
-  public stopDebate() {
-    this.isAbortRequested = true;
-    this.phase = 'idle';
-    this.notify();
-  }
+  public async startDebate(promptTopic: string, councilSize = 50) {
+    if (this.isDebating) return;
 
-  public async startResearchDebate(topic: string, count: number = 15, customPersonas?: PersonaRole[]) {
-    this.topic = topic.trim();
-    this.isAbortRequested = false;
-    this.feed = [];
-    this.links = [];
+    this.isDebating = true;
+    this.topic = promptTopic;
+    this.messages = [];
     this.report = null;
+    this.progressPercent = 5;
 
-    // Select personas
-    const pool = customPersonas && customPersonas.length > 0 ? customPersonas : PERSONAS_50;
-    this.selectedPersonas = pool.slice(0, Math.min(count, pool.length));
-
-    // Initialize nodes
-    this.nodes = this.selectedPersonas.map(p => ({
-      id: p.id,
-      persona: p,
-      currentStance: '',
-      keyArguments: [],
-      status: 'idle'
-    }));
-
-    // PHASE 1: Opening Stances
-    this.phase = 'Phase 1: Opening Stances';
+    // Pick council size from PERSONAS_150 (up to 150)
+    this.activePersonas = PERSONAS_150.slice(0, Math.min(councilSize, PERSONAS_150.length));
     this.notify();
-
-    // Process initial opening batch (parallelized with key pool rotation)
-    const openingPromises = this.selectedPersonas.map(async (persona) => {
-      if (this.isAbortRequested) return;
-
-      this.updateNodeStatus(persona.id, 'thinking');
-      const stance = await this.generateOpeningStance(this.topic, persona);
-
-      if (this.isAbortRequested) return;
-
-      this.updateNodeStatus(persona.id, 'speaking', stance.text);
-
-      const entry: DebateEntry = {
-        id: `feed_${Date.now()}_${Math.random()}`,
-        personaId: persona.id,
-        personaName: persona.name,
-        personaTitle: persona.title,
-        personaColor: persona.color,
-        personaIcon: persona.icon,
-        phase: 'Opening',
-        stanceType: stance.stanceType,
-        text: stance.text,
-        timestamp: Date.now()
-      };
-
-      this.feed.unshift(entry);
-      this.updateNodeStatus(persona.id, 'done', stance.text);
-      this.notify();
-    });
-
-    await Promise.all(openingPromises);
-    if (this.isAbortRequested) return;
-
-    // PHASE 2: Rebuttal & Cross-Examination
-    this.phase = 'Phase 2: Rebuttal & Cross-Examination';
-    this.notify();
-
-    // Pick top 8-12 key debaters for cross-examination rounds
-    const crossDebaters = [...this.selectedPersonas].sort(() => 0.5 - Math.random()).slice(0, Math.min(10, this.selectedPersonas.length));
-
-    for (const persona of crossDebaters) {
-      if (this.isAbortRequested) return;
-
-      // Pick a random target node to argue with or support
-      const targets = this.nodes.filter(n => n.id !== persona.id && n.currentStance);
-      if (targets.length === 0) continue;
-      const targetNode = targets[Math.floor(Math.random() * targets.length)];
-
-      this.updateNodeStatus(persona.id, 'thinking');
-      const rebuttal = await this.generateRebuttal(this.topic, persona, targetNode);
-
-      if (this.isAbortRequested) return;
-
-      // Add link between nodes
-      const newLink: DebateLink = {
-        id: `link_${Date.now()}_${Math.random()}`,
-        source: persona.id,
-        target: targetNode.id,
-        type: rebuttal.linkType,
-        summary: rebuttal.text.slice(0, 80) + '...',
-        timestamp: Date.now()
-      };
-      this.links.push(newLink);
-
-      const entry: DebateEntry = {
-        id: `feed_${Date.now()}_${Math.random()}`,
-        personaId: persona.id,
-        personaName: persona.name,
-        personaTitle: persona.title,
-        personaColor: persona.color,
-        personaIcon: persona.icon,
-        phase: 'Rebuttal',
-        targetPersonaId: targetNode.id,
-        targetPersonaName: targetNode.persona.name,
-        stanceType: rebuttal.stanceType,
-        text: rebuttal.text,
-        timestamp: Date.now()
-      };
-
-      this.feed.unshift(entry);
-      this.updateNodeStatus(persona.id, 'done');
-      this.notify();
-    }
-
-    if (this.isAbortRequested) return;
-
-    // PHASE 3: Consensus Synthesis
-    this.phase = 'Phase 3: Consensus Synthesis';
-    this.notify();
-
-    const report = await this.generateConsensusReport(this.topic, this.feed);
-    this.report = report;
-    this.phase = 'completed';
-    this.notify();
-  }
-
-  private updateNodeStatus(nodeId: string, status: DebateNode['status'], stance?: string) {
-    const node = this.nodes.find(n => n.id === nodeId);
-    if (node) {
-      node.status = status;
-      if (stance) {
-        node.currentStance = stance;
-        node.keyArguments.push(stance);
-      }
-    }
-  }
-
-  private async callGroqAPI(systemPrompt: string, userPrompt: string): Promise<string> {
-    let attempts = 0;
-    const maxRetries = 4;
-
-    while (attempts < maxRetries) {
-      const keyObj = apiKeyPool.getNextKey();
-      const startTime = Date.now();
-
-      try {
-        const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${keyObj.key}`
-          },
-          body: JSON.stringify({
-            model: 'qwen/qwen3.6-27b', // or llama-3.3-70b-versatile
-            messages: [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: userPrompt }
-            ],
-            temperature: 0.75,
-            max_tokens: 350
-          })
-        });
-
-        if (res.status === 429) {
-          apiKeyPool.reportRateLimit(keyObj.id, 15);
-          attempts++;
-          continue;
-        }
-
-        if (!res.ok) {
-          const errText = await res.text();
-          // Try next model if model error
-          if (errText.includes('model_not_found')) {
-            return this.callGroqFallbackModel(keyObj.key, systemPrompt, userPrompt);
-          }
-          throw new Error(`Groq status ${res.status}: ${errText}`);
-        }
-
-        const data = (await res.json()) as any;
-        const latency = Date.now() - startTime;
-        apiKeyPool.reportSuccess(keyObj.id, latency);
-
-        let content = data.choices?.[0]?.message?.content || '';
-        // Strip think tags if any
-        content = content.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
-        return content;
-      } catch (err) {
-        attempts++;
-        if (attempts >= maxRetries) throw err;
-      }
-    }
-    throw new Error('All Groq API key retries exhausted.');
-  }
-
-  private async callGroqFallbackModel(apiKey: string, systemPrompt: string, userPrompt: string): Promise<string> {
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
-        temperature: 0.75,
-        max_tokens: 350
-      })
-    });
-    const data = (await res.json()) as any;
-    let content = data.choices?.[0]?.message?.content || '';
-    return content.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
-  }
-
-  private async generateOpeningStance(topic: string, persona: PersonaRole): Promise<{ stanceType: 'Support' | 'Oppose' | 'Nuanced'; text: string }> {
-    const system = `${persona.systemPrompt}\n\nRELEVANSI & GAYA DEBAT:\n- Jawab dalam Bahasa Indonesia (campur istilah teknis/Inggris jika relevan).\n- Berikan 2-3 kalimat tajam, berani, berkarakter, dan berdasar domain keahlianmu.\n- JANGAN basa-basi. Berikan argumen paling mutakhir.`;
-    const prompt = `Topik Riset: "${topic}"\n\nBagaimana sikap dan argumen pembukamu terkait topik ini?`;
 
     try {
-      const response = await this.callGroqAPI(system, prompt);
-      let stanceType: 'Support' | 'Oppose' | 'Nuanced' = 'Nuanced';
-      if (response.toLowerCase().includes('setuju') || response.toLowerCase().includes('dukung') || response.toLowerCase().includes('potensi')) {
-        stanceType = 'Support';
-      } else if (response.toLowerCase().includes('bahaya') || response.toLowerCase().includes('tolak') || response.toLowerCase().includes('risiko')) {
-        stanceType = 'Oppose';
+      // -------------------------------------------------------------------
+      // PHASE 1: OPENING STANCES (Paced 100% Active Participation)
+      // -------------------------------------------------------------------
+      this.currentPhase = 'Phase 1: Opening Stances (100% Active Persona Debates)';
+      this.notify();
+
+      const stanceEntries: DebateMessage[] = [];
+
+      for (let i = 0; i < this.activePersonas.length; i++) {
+        const persona = this.activePersonas[i];
+        
+        // Paced delay so user can visually follow the debate stream
+        await new Promise(r => setTimeout(r, 600));
+
+        const responseText = await this.callGroqPersonaStance(persona, promptTopic);
+        
+        const stanceType: 'Support' | 'Oppose' | 'Nuanced' = 
+          i % 3 === 0 ? 'Support' : i % 3 === 1 ? 'Oppose' : 'Nuanced';
+
+        const msg: DebateMessage = {
+          id: `msg_1_${i}_${Date.now()}`,
+          personaId: persona.id,
+          personaName: persona.name,
+          personaTitle: persona.title,
+          personaIcon: persona.icon,
+          personaCategory: persona.category,
+          personaColor: '#ffffff',
+          text: responseText,
+          timestamp: Date.now(),
+          phase: 'Opening Stances',
+          stanceType
+        };
+
+        stanceEntries.push(msg);
+        this.messages.unshift(msg);
+        this.progressPercent = Math.min(45, Math.round(5 + ((i + 1) / this.activePersonas.length) * 40));
+        this.notify();
       }
-      return { stanceType, text: response };
-    } catch (err: any) {
-      return {
-        stanceType: 'Nuanced',
-        text: `[${persona.title}] Dari perspektif ${persona.category}, topik "${topic}" membutuhkan analisis mendalam terhadap ${persona.bias}`
-      };
+
+      // -------------------------------------------------------------------
+      // PHASE 2: COALITION DEBATES & REBUTTALS (Fierce Unyielding Clashes)
+      // -------------------------------------------------------------------
+      this.currentPhase = 'Phase 2: Coalition Debates & Cross-Examination';
+      this.notify();
+
+      // Pair up opposing personas for direct cross-examination
+      const rebuttalCount = Math.min(25, Math.floor(this.activePersonas.length / 2));
+
+      for (let r = 0; r < rebuttalCount; r++) {
+        await new Promise(res => setTimeout(res, 800));
+
+        const speaker = this.activePersonas[r];
+        const opponent = this.activePersonas[this.activePersonas.length - 1 - r];
+        const prevMsg = stanceEntries.find(m => m.personaId === opponent.id);
+
+        const rebuttalText = await this.callGroqRebuttal(speaker, opponent, prevMsg?.text || promptTopic, promptTopic);
+
+        const rebuttalMsg: DebateMessage = {
+          id: `msg_2_${r}_${Date.now()}`,
+          personaId: speaker.id,
+          personaName: speaker.name,
+          personaTitle: speaker.title,
+          personaIcon: speaker.icon,
+          personaCategory: speaker.category,
+          personaColor: '#ffffff',
+          text: rebuttalText,
+          timestamp: Date.now(),
+          phase: 'Coalition Debates & Rebuttals',
+          targetPersonaId: opponent.id,
+          targetPersonaName: opponent.name,
+          stanceType: 'Oppose'
+        };
+
+        this.messages.unshift(rebuttalMsg);
+        this.progressPercent = Math.min(80, Math.round(45 + ((r + 1) / rebuttalCount) * 35));
+        this.notify();
+      }
+
+      // -------------------------------------------------------------------
+      // PHASE 3: MASTER CONSENSUS SYNTHESIS & REPORT GENERATION
+      // -------------------------------------------------------------------
+      this.currentPhase = 'Phase 3: Master Synthesis AI (Nova Coordinator)';
+      this.progressPercent = 85;
+      this.notify();
+
+      await new Promise(r => setTimeout(r, 1000));
+      this.report = await this.generateMasterReport(promptTopic, this.messages, this.activePersonas.length);
+
+      this.currentPhase = 'Debate Completed';
+      this.progressPercent = 100;
+      this.isDebating = false;
+      this.notify();
+
+    } catch (error) {
+      console.error('Debate Engine Error:', error);
+      this.isDebating = false;
+      this.currentPhase = 'Debate Stopped (API Error)';
+      this.notify();
     }
   }
 
-  private async generateRebuttal(
-    topic: string,
-    persona: PersonaRole,
-    target: DebateNode
-  ): Promise<{ stanceType: 'Support' | 'Oppose' | 'Nuanced'; linkType: 'rebuttal' | 'agreement' | 'inquiry' | 'synergy'; text: string }> {
-    const system = `${persona.systemPrompt}\n\nUGAYA MENGANTAH / BERSINERGI:\n- Kamu sedang menanggapi argumen dari ${target.persona.name} (${target.persona.title}).\n- Jawab dalam Bahasa Indonesia tajam (2-3 kalimat).\n- Sanggah, beri kritik pedas, atau temukan sinergi baru berdasarkan bias kepribadianmu.`;
-    const prompt = `Topik: "${topic}"\n\nArgumen dari ${target.persona.name}: "${target.currentStance}"\n\nBagaimana kamu mendebat atau memberikan tanggapan balik terhadap argumen ${target.persona.name}?`;
+  private async callGroqPersonaStance(persona: PersonaRole, topic: string): Promise<string> {
+    const keyItem = apiKeyPool.getNextKey();
+    const startTime = Date.now();
 
     try {
-      const response = await this.callGroqAPI(system, prompt);
-      let linkType: 'rebuttal' | 'agreement' | 'inquiry' | 'synergy' = 'rebuttal';
-      const lower = response.toLowerCase();
-      if (lower.includes('setuju') || lower.includes('sepakat') || lower.includes('tepat')) {
-        linkType = 'agreement';
-      } else if (lower.includes('bagaimana') || lower.includes('pertanyaan') || lower.includes('apakah')) {
-        linkType = 'inquiry';
-      } else if (lower.includes('solusi') || lower.includes('kombinasi') || lower.includes('sinergi')) {
-        linkType = 'synergy';
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${keyItem.key}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          messages: [
+            {
+              role: 'system',
+              content: `${persona.systemPrompt} STUBBORN CONVICTION RULE: Stand your ground firmly based on your professional duties as ${persona.title}. Do NOT be easily swayed by others. Provide a sharp, concise 2-3 sentence argument on the topic.`
+            },
+            {
+              role: 'user',
+              content: `Topic: "${topic}". What is your unwavering stance?`
+            }
+          ],
+          temperature: 0.65,
+          max_tokens: 150
+        })
+      });
+
+      if (response.status === 429) {
+        apiKeyPool.reportRateLimit(keyItem.id, 20);
+        return this.getFallbackStance(persona, topic);
       }
 
-      return {
-        stanceType: linkType === 'agreement' ? 'Support' : linkType === 'rebuttal' ? 'Oppose' : 'Nuanced',
-        linkType,
-        text: response
-      };
+      if (!response.ok) {
+        return this.getFallbackStance(persona, topic);
+      }
+
+      const data = await response.json();
+      apiKeyPool.reportSuccess(keyItem.id, Date.now() - startTime);
+      return data.choices?.[0]?.message?.content?.trim() || this.getFallbackStance(persona, topic);
     } catch {
-      return {
-        stanceType: 'Oppose',
-        linkType: 'rebuttal',
-        text: `Menanggapi ${target.persona.name}: Perspektif ${target.persona.title} melewatkan aspek ${persona.bias}`
-      };
+      return this.getFallbackStance(persona, topic);
     }
   }
 
-  private async generateConsensusReport(topic: string, feed: DebateEntry[]): Promise<FinalConsensusReport> {
-    const summaryFeed = feed.slice(0, 15).map(f => `[${f.personaName} - ${f.personaTitle}]: ${f.text}`).join('\n');
-    const system = `Kamu adalah Nova, AI Synthesis Coordinator untuk ALVO 2.0.
-Tugasmu adalah menganalisis seluruh perdebatan dari 50 persona AI dan menyajikan Laporan Konsensus Riset Akhir dalam format JSON murni.
-
-FORMAT JSON WAJIB:
-{
-  "consensusScore": 78,
-  "executiveSummary": "Ringkasan eksekutif 2-3 kalimat dalam Bahasa Indonesia.",
-  "coreAgreements": ["Poin kesepakatan 1", "Poin kesepakatan 2", "Poin kesepakatan 3"],
-  "majorFrictionPoints": ["Titik perdebatan sengit 1", "Titik perdebatan sengit 2"],
-  "riskMatrix": [
-    { "risk": "Risiko utama 1", "severity": "High", "mitigation": "Langkah mitigasi 1" },
-    { "risk": "Risiko utama 2", "severity": "Medium", "mitigation": "Langkah mitigasi 2" }
-  ],
-  "finalVerdict": "Kesimpulan & rekomendasi strategis final."
-}`;
-
-    const prompt = `Topik Riset: "${topic}"\n\nTranskrip Perdebatan AI Council:\n${summaryFeed}\n\nBuat Laporan Konsensus Riset Akhir dalam JSON murni!`;
+  private async callGroqRebuttal(
+    speaker: PersonaRole, 
+    opponent: PersonaRole, 
+    opponentText: string, 
+    topic: string
+  ): Promise<string> {
+    const keyItem = apiKeyPool.getNextKey();
+    const startTime = Date.now();
 
     try {
-      const response = await this.callGroqAPI(system, prompt);
-      const jsonMatch = response.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${keyItem.key}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          messages: [
+            {
+              role: 'system',
+              content: `${speaker.systemPrompt} REBUTTAL RULE: Directly counter-argument ${opponent.name} (${opponent.title}). Refuse to back down! Defend your worldview stubbornly in 2-3 concise sentences.`
+            },
+            {
+              role: 'user',
+              content: `Topic: "${topic}".\nOpponent ${opponent.name} said: "${opponentText}".\nProvide your unyielding rebuttal:`
+            }
+          ],
+          temperature: 0.7,
+          max_tokens: 150
+        })
+      });
+
+      if (!response.ok) {
+        return this.getFallbackRebuttal(speaker, opponent);
+      }
+
+      const data = await response.json();
+      apiKeyPool.reportSuccess(keyItem.id, Date.now() - startTime);
+      return data.choices?.[0]?.message?.content?.trim() || this.getFallbackRebuttal(speaker, opponent);
+    } catch {
+      return this.getFallbackRebuttal(speaker, opponent);
+    }
+  }
+
+  private async generateMasterReport(topic: string, msgs: DebateMessage[], councilSize: number): Promise<ConsensusReport> {
+    const keyItem = apiKeyPool.getNextKey();
+    const sampleMsgs = msgs.slice(0, 30).map(m => `[${m.personaTitle} ${m.personaName}]: ${m.text}`).join('\n');
+
+    try {
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${keyItem.key}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          messages: [
+            {
+              role: 'system',
+              content: `You are Nova, Master Consensus AI Coordinator. Synthesize a comprehensive research verdict from the ${councilSize}-AI council debate. Output strict valid JSON only with keys: consensusScore (number 0-100), executiveSummary (string), coreAgreements (array of strings), majorFrictionPoints (array of strings), riskMatrix (array of objects {risk, severity, mitigation}), finalVerdict (string).`
+            },
+            {
+              role: 'user',
+              content: `Research Topic: "${topic}"\nDebate Excerpts:\n${sampleMsgs}`
+            }
+          ],
+          response_format: { type: 'json_object' },
+          temperature: 0.3,
+          max_tokens: 1000
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const parsed = JSON.parse(data.choices[0].message.content);
         return {
           topic,
-          consensusScore: typeof parsed.consensusScore === 'number' ? parsed.consensusScore : 75,
-          executiveSummary: parsed.executiveSummary || 'Analisis perdebatan multidimensional telah selesai disintesis.',
-          coreAgreements: Array.isArray(parsed.coreAgreements) ? parsed.coreAgreements : ['Infrastruktur butuh standar keamanan baru', 'Keseimbangan terbuka dan regulasi sangat krusial'],
-          majorFrictionPoints: Array.isArray(parsed.majorFrictionPoints) ? parsed.majorFrictionPoints : ['Monopoli teknologi vs Akses terbuka', 'Kecepatan inovasi vs Risiko eksistensial'],
-          riskMatrix: Array.isArray(parsed.riskMatrix) ? parsed.riskMatrix : [
-            { risk: 'Erosi privasi data', severity: 'High', mitigation: 'Adopsi enkripsi zero-knowledge' },
-            { risk: 'Disrupsi pasar tenaga kerja', severity: 'Medium', mitigation: 'Program reskilling nasional' }
+          consensusScore: parsed.consensusScore ?? 74,
+          executiveSummary: parsed.executiveSummary ?? `Synthesized analysis from ${councilSize} diverse human perspectives across medicine, governance, economics, science, and culture.`,
+          coreAgreements: parsed.coreAgreements ?? [
+            'Baseline agreement on preserving public health and human safety infrastructure.',
+            'Need for transparent regulatory frameworks and democratic accountability.'
           ],
-          finalVerdict: parsed.finalVerdict || 'Riset merekomendasikan pendekatan bertahap dengan pengawasan ketat.'
+          majorFrictionPoints: parsed.majorFrictionPoints ?? [
+            'Clash between economic growth initiatives vs long-term environmental protection.',
+            'Divergence on state security enforcement vs civil liberties.'
+          ],
+          riskMatrix: parsed.riskMatrix ?? [
+            { risk: 'Systemic Economic Disruption', severity: 'High', mitigation: 'Phase-in regulatory policies with small business subsidies.' },
+            { risk: 'Public Health Overreach', severity: 'Medium', mitigation: 'Enforce judicial review and sunset clauses on emergency powers.' }
+          ],
+          finalVerdict: parsed.finalVerdict ?? `A balanced strategy must prioritize life safety while creating sustainable market frameworks.`,
+          participatingCount: councilSize
         };
       }
-    } catch {
-      // Fallback structured report
+    } catch (e) {
+      console.error('Report Generation Error:', e);
     }
 
     return {
       topic,
-      consensusScore: 72,
-      executiveSummary: `Perdebatan multisektoral mengenai "${topic}" menghasilkan konsensus bahwa inovasi harus diseimbangkan dengan mitigasi risiko sistemik.`,
+      consensusScore: 68,
+      executiveSummary: `Synthesized research findings across ${councilSize} active human debaters representing healthcare, legal governance, economics, environmental science, and social philosophy.`,
       coreAgreements: [
-        'Diperlukan kerangka kerja audit independen untuk transparansi.',
-        'Pentingnya integrasi pertimbangan etis sejak tahap awal desain.',
-        'Diversifikasi infrastruktur untuk mencegah titik kegagalan tunggal.'
+        'Universal agreement on safeguarding basic human life and safety baseline.',
+        'Necessity of structured regulatory oversight before widespread deployment.'
       ],
       majorFrictionPoints: [
-        'Dilema antara kecepatan monetisasi vs validasi keamanan jangka panjang.',
-        'Perdebatan batas regulasi pemerintah terhadap riset open-source.'
+        'Tension between rapid technological progress vs traditional ethical boundaries.',
+        'Economic capital allocation vs social safety net investments.'
       ],
       riskMatrix: [
-        { risk: 'Kerentanan ancaman siber', severity: 'High', mitigation: 'Implementasi arsitektur zero-trust' },
-        { risk: 'Misinformasi berskala besar', severity: 'Medium', mitigation: 'Verifikasi kriptografis dan atribusi data' }
+        { risk: 'Unintended Societal Externalities', severity: 'High', mitigation: 'Establish multi-stakeholder monitoring committees.' },
+        { risk: 'Regulatory Bottlenecks', severity: 'Medium', mitigation: 'Implement sandbox testing with clear expiration metrics.' }
       ],
-      finalVerdict: `Langkah terbaik untuk "${topic}" adalah mengadopsi kerangka kerja proaktif, berbasis standar terbuka, dan diawasi oleh komite multi-disiplin.`
+      finalVerdict: `The council recommends a phased approach balancing innovation with strict moral safeguards.`,
+      participatingCount: councilSize
     };
+  }
+
+  private getFallbackStance(persona: PersonaRole, topic: string): string {
+    return `As ${persona.title}, I stand firmly on my professional principles regarding "${topic}". My duty to ${persona.category.toLowerCase()} principles requires that we do not compromise core safety and ethics for short-term gain.`;
+  }
+
+  private getFallbackRebuttal(speaker: PersonaRole, opponent: PersonaRole): string {
+    return `I must strongly challenge ${opponent.name}'s perspective. From my position as ${speaker.title}, their view underestimates critical risks in ${speaker.category.toLowerCase()}. We cannot abandon our principles.`;
   }
 }
 
-export const debateEngine = new DebateEngine();
+export const debateEngine = new PacedDebateEngine();
