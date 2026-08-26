@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { WASidebar } from './components/WASidebar';
 import { WAChatWindow } from './components/WAChatWindow';
 import { WAMemberModal } from './components/WAMemberModal';
+import { WAEditMemberModal } from './components/WAEditMemberModal';
 import { waEngine, WAMessage } from './services/groupEngine';
 import { WAMember } from './data/personas';
 
@@ -12,6 +13,7 @@ export function App() {
   const [groupName, setGroupName] = useState('ALVO Chaos Squad 🔥');
 
   const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
+  const [selectedMemberToEdit, setSelectedMemberToEdit] = useState<WAMember | null>(null);
 
   useEffect(() => {
     const unsubscribe = waEngine.subscribe((state) => {
@@ -38,6 +40,10 @@ export function App() {
     waEngine.removeMember(id);
   };
 
+  const handleSaveMember = (updatedMember: WAMember) => {
+    waEngine.updateMember(updatedMember);
+  };
+
   const handleAutoGenerate = () => {
     waEngine.autoGenerateMembers();
   };
@@ -54,6 +60,7 @@ export function App() {
           members={members}
           onOpenMemberModal={() => setIsMemberModalOpen(true)}
           onAutoGenerate={handleAutoGenerate}
+          onSelectMemberToEdit={(m) => setSelectedMemberToEdit(m)}
         />
 
         {/* Main Chat Window */}
@@ -75,6 +82,14 @@ export function App() {
         onAddMember={handleAddMember}
         onRemoveMember={handleRemoveMember}
         onAutoGenerate={handleAutoGenerate}
+        onSelectMemberToEdit={(m) => setSelectedMemberToEdit(m)}
+      />
+
+      {/* Edit Character Modal */}
+      <WAEditMemberModal
+        member={selectedMemberToEdit}
+        onClose={() => setSelectedMemberToEdit(null)}
+        onSaveMember={handleSaveMember}
       />
 
     </div>

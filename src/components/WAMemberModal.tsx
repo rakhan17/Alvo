@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { WAMember } from '../data/personas';
-import { X, Users, Plus, Trash2, UserPlus, Sparkles } from 'lucide-react';
+import { X, Users, Plus, Trash2, UserPlus, Edit3 } from 'lucide-react';
 
 interface WAMemberModalProps {
   isOpen: boolean;
@@ -9,6 +9,7 @@ interface WAMemberModalProps {
   onAddMember: (newMember: WAMember) => void;
   onRemoveMember: (id: string) => void;
   onAutoGenerate: () => void;
+  onSelectMemberToEdit: (member: WAMember) => void;
 }
 
 export const WAMemberModal: React.FC<WAMemberModalProps> = ({
@@ -17,7 +18,8 @@ export const WAMemberModal: React.FC<WAMemberModalProps> = ({
   members,
   onAddMember,
   onRemoveMember,
-  onAutoGenerate
+  onAutoGenerate,
+  onSelectMemberToEdit
 }) => {
   const [name, setName] = useState('');
   const [roleTitle, setRoleTitle] = useState('');
@@ -84,7 +86,7 @@ export const WAMemberModal: React.FC<WAMemberModalProps> = ({
             <div>
               <h4 className="text-xs font-bold text-white font-mono">1-Click Auto Fill Group Squad</h4>
               <p className="text-[11px] text-[#8696a0] font-sans">
-                Instantly populate your WhatsApp group with 20 diverse, hilarious AI personalities!
+                Instantly populate your WhatsApp group with 20 diverse AI personalities!
               </p>
             </div>
             <button
@@ -139,13 +141,14 @@ export const WAMemberModal: React.FC<WAMemberModalProps> = ({
           {/* Existing Roster Table */}
           <div className="space-y-2">
             <h4 className="text-xs font-mono font-bold text-[#8696a0] uppercase">
-              Current Group Roster
+              Current Group Roster (Click Card to Edit Prompt)
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {members.map(m => (
                 <div
                   key={m.id}
-                  className="flex items-center justify-between p-3 rounded-xl bg-[#202c33] border border-[#222d34]"
+                  onClick={() => onSelectMemberToEdit(m)}
+                  className="flex items-center justify-between p-3 rounded-xl bg-[#202c33] border border-[#222d34] hover:border-[#00a884]/40 cursor-pointer transition group"
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
                     <div
@@ -155,8 +158,8 @@ export const WAMemberModal: React.FC<WAMemberModalProps> = ({
                       {m.name.charAt(0)}
                     </div>
                     <div className="min-w-0">
-                      <h5 className="text-xs font-bold text-white truncate font-sans">
-                        {m.name} {m.isAraa && '❤️‍- (Protected Wife)'}
+                      <h5 className="text-xs font-bold text-white truncate font-sans flex items-center gap-1">
+                        {m.name} <Edit3 className="w-3 h-3 text-[#8696a0] group-hover:text-[#00a884] transition inline" />
                       </h5>
                       <p className="text-[10px] text-[#8696a0] truncate font-sans">{m.roleTitle}</p>
                     </div>
@@ -164,7 +167,10 @@ export const WAMemberModal: React.FC<WAMemberModalProps> = ({
 
                   {!m.isAraa && (
                     <button
-                      onClick={() => onRemoveMember(m.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRemoveMember(m.id);
+                      }}
                       className="p-1.5 rounded-lg hover:bg-rose-500/20 text-[#8696a0] hover:text-rose-400 transition"
                       title="Remove Member"
                     >

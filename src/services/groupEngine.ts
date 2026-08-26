@@ -102,7 +102,6 @@ class WAGroupEngine {
     }
   }
 
-  // User sends a message
   public async sendUserMessage(text: string, replyTo?: { senderName: string; text: string }) {
     if (!text.trim()) return;
 
@@ -120,47 +119,43 @@ class WAGroupEngine {
     this.messages.push(userMsg);
     this.notify();
 
-    // Trigger AI Responses (Araa priority + other group members)
+    // Trigger AI Responses
     this.triggerGroupResponses(text.trim(), userMsg);
   }
 
-  // Spontaneous background loop where AI group members talk on their own
   private startSpontaneousLoop() {
     if (this.spontaneousTimer) clearInterval(this.spontaneousTimer);
 
-    // Every 8-15 seconds, a random active AI member speaks spontaneously
+    // Every 8-12 seconds, random AI members chat spontaneously
     this.spontaneousTimer = setInterval(() => {
       if (!this.isProcessing && this.messages.length > 0) {
         const randomChance = Math.random();
-        if (randomChance > 0.35) { // 65% chance of spontaneous chat
+        if (randomChance > 0.35) {
           this.triggerSpontaneousChatter();
         }
       }
-    }, 10000);
+    }, 9000);
   }
 
   private async triggerSpontaneousChatter() {
     this.isProcessing = true;
 
-    // Pick a random AI member (favor Araa 40% of the time)
     const availableMembers = this.members.filter(m => m.status === 'online');
     if (availableMembers.length === 0) {
       this.isProcessing = false;
       return;
     }
 
-    const isAraa = Math.random() < 0.4;
+    const isAraa = Math.random() < 0.45;
     const speaker = isAraa 
       ? this.members.find(m => m.id === 'araa') || availableMembers[0]
       : availableMembers[Math.floor(Math.random() * availableMembers.length)];
 
-    // Set Typing Status
     this.typingMemberName = speaker.name;
     this.notify();
 
-    await new Promise(r => setTimeout(r, 1200 + Math.random() * 1500));
+    await new Promise(r => setTimeout(r, 1000 + Math.random() * 1200));
 
-    // Get recent chat context
     const recentMsgs = this.messages.slice(-5);
     const lastMsg = recentMsgs[recentMsgs.length - 1];
 
@@ -168,7 +163,6 @@ class WAGroupEngine {
 
     this.typingMemberName = null;
 
-    // Build WA Message
     const msg: WAMessage = {
       id: `msg_ai_${Date.now()}`,
       senderId: speaker.id,
@@ -183,20 +177,22 @@ class WAGroupEngine {
     this.messages.push(msg);
     this.notify();
 
-    // Occasional rapid multi-bubble (spam)
-    if (Math.random() < 0.3) {
+    // UNIQUE FOLLOW-UP SECOND BUBBLE (FIX BUG PESAN GANDA)
+    if (Math.random() < 0.4) {
       await new Promise(r => setTimeout(r, 800));
       this.typingMemberName = speaker.name;
       this.notify();
-      await new Promise(r => setTimeout(r, 1000));
+      await new Promise(r => setTimeout(r, 1100));
       
-      const rapidFollowup = isAraa ? 'wkwkwkwk bener kan kata i!! 😤' : 'wkwkwk anjayy real bgt';
+      // Call Groq LLM for a UNIQUE follow-up second bubble (NO STATIC SAMPLES!)
+      const followupText = await this.callGroqFollowupResponse(speaker, aiText);
+
       this.messages.push({
         id: `msg_ai_spam_${Date.now()}`,
         senderId: speaker.id,
         senderName: speaker.name,
         senderColor: speaker.avatarColor,
-        text: rapidFollowup,
+        text: followupText,
         timestamp: Date.now(),
         isUser: false
       });
@@ -215,12 +211,12 @@ class WAGroupEngine {
     if (araa) {
       this.typingMemberName = araa.name;
       this.notify();
-      await new Promise(r => setTimeout(r, 1200));
+      await new Promise(r => setTimeout(r, 1100));
 
       const araaReply = await this.callGroqAIResponse(araa, userPrompt, this.messages.slice(-6));
       this.typingMemberName = null;
 
-      this.messages.push({
+      const araaMsg: WAMessage = {
         id: `msg_araa_${Date.now()}`,
         senderId: araa.id,
         senderName: araa.name,
@@ -229,19 +225,42 @@ class WAGroupEngine {
         timestamp: Date.now(),
         isUser: false,
         replyToMsg: { senderName: 'Rakhan', text: userPrompt }
-      });
+      };
+
+      this.messages.push(araaMsg);
       this.notify();
+
+      // Araa follow-up rapid bubble (Unique text!)
+      if (Math.random() < 0.5) {
+        await new Promise(r => setTimeout(r, 700));
+        this.typingMemberName = araa.name;
+        this.notify();
+        await new Promise(r => setTimeout(r, 1000));
+        
+        const araaFollowup = await this.callGroqFollowupResponse(araa, araaReply);
+        this.messages.push({
+          id: `msg_araa_followup_${Date.now()}`,
+          senderId: araa.id,
+          senderName: araa.name,
+          senderColor: araa.avatarColor,
+          text: araaFollowup,
+          timestamp: Date.now(),
+          isUser: false
+        });
+        this.typingMemberName = null;
+        this.notify();
+      }
     }
 
     // 2. Another group member responds or roasts
     const otherMembers = this.members.filter(m => m.id !== 'araa' && m.status === 'online');
-    if (otherMembers.length > 0 && Math.random() > 0.2) {
-      await new Promise(r => setTimeout(r, 1500));
+    if (otherMembers.length > 0 && Math.random() > 0.25) {
+      await new Promise(r => setTimeout(r, 1300));
       const responder = otherMembers[Math.floor(Math.random() * otherMembers.length)];
 
       this.typingMemberName = responder.name;
       this.notify();
-      await new Promise(r => setTimeout(r, 1400));
+      await new Promise(r => setTimeout(r, 1200));
 
       const responderReply = await this.callGroqAIResponse(responder, userPrompt, this.messages.slice(-6));
       this.typingMemberName = null;
@@ -308,6 +327,51 @@ ATURAN PESAN WHATSAPP:
     }
   }
 
+  // Generates a UNIQUE follow-up second speech bubble for double-messages
+  private async callGroqFollowupResponse(member: WAMember, previousBubbleText: string): Promise<string> {
+    const keyItem = apiKeyPool.getNextKey();
+    const startTime = Date.now();
+
+    try {
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${keyItem.key}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          messages: [
+            {
+              role: 'system',
+              content: `Kamu adalah "${member.name}" (${member.roleTitle}). Kamu baru saja mengirim pesan: "${previousBubbleText}". Sekarang kirim pesan lanjutan (double message/follow-up bubble) yang 100% UNIK dan menyambung pesan pertamamu dalam 1 kalimat pendek WA.`
+            },
+            {
+              role: 'user',
+              content: `Kirim pesan lanjutan pendek yang berbeda dan unik:`
+            }
+          ],
+          temperature: 0.9,
+          max_tokens: 80
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        apiKeyPool.reportSuccess(keyItem.id, Date.now() - startTime);
+        const text = data.choices?.[0]?.message?.content?.trim();
+        if (text && text !== previousBubbleText) return text;
+      }
+    } catch {
+      // Fallback
+    }
+
+    if (member.isAraa) {
+      return 'mana gak ada yang berani bales lg wkwk 😤❤️‍🔥';
+    }
+    return 'wkwkwk bener kan kata gue 😭';
+  }
+
   private getFallbackText(member: WAMember): string {
     if (member.isAraa) {
       return 'Rakhan sayang! Araa selalu ada buat kamuuu ❤️‍🔥 Kalo ada yang macem-macem tak sikat 🔪';
@@ -321,7 +385,15 @@ ATURAN PESAN WHATSAPP:
     return samples[Math.floor(Math.random() * samples.length)];
   }
 
-  // Member Management (1 to 20 members)
+  // Edit existing member attributes dynamically
+  public updateMember(updatedMember: WAMember) {
+    const idx = this.members.findIndex(m => m.id === updatedMember.id);
+    if (idx !== -1) {
+      this.members[idx] = { ...updatedMember };
+      this.notify();
+    }
+  }
+
   public addMember(newMember: WAMember): boolean {
     if (this.members.length >= 20) return false;
     this.members.push(newMember);

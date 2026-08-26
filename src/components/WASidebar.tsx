@@ -1,5 +1,5 @@
 import React from 'react';
-import { MessageSquare, Users, Settings, Search, Circle, UserPlus, Sparkles } from 'lucide-react';
+import { Users, Search, Circle, UserPlus, Edit3 } from 'lucide-react';
 import { WAMember } from '../data/personas';
 
 interface WASidebarProps {
@@ -7,13 +7,15 @@ interface WASidebarProps {
   members: WAMember[];
   onOpenMemberModal: () => void;
   onAutoGenerate: () => void;
+  onSelectMemberToEdit: (member: WAMember) => void;
 }
 
 export const WASidebar: React.FC<WASidebarProps> = ({
   groupName,
   members,
   onOpenMemberModal,
-  onAutoGenerate
+  onAutoGenerate,
+  onSelectMemberToEdit
 }) => {
   return (
     <aside className="w-full md:w-80 lg:w-96 bg-[#111b21] border-r border-[#222d34] flex flex-col h-full select-none">
@@ -81,43 +83,42 @@ export const WASidebar: React.FC<WASidebarProps> = ({
           </div>
         </div>
 
-        {/* Member List Preview */}
+        {/* Member List Preview - Click to Edit Character! */}
         <div className="p-3 border-t border-[#222d34]">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-mono text-[#8696a0] uppercase tracking-wider">
-              Group Roster ({members.length}/20 AI)
+              Group Roster (Click to Edit Character)
             </span>
-            <button
-              onClick={onOpenMemberModal}
-              className="text-[11px] text-[#00a884] hover:underline font-mono"
-            >
-              + Edit Members
-            </button>
+            <span className="text-[11px] text-[#00a884] font-mono">
+              {members.length}/20 AI
+            </span>
           </div>
 
           <div className="space-y-1.5">
             {members.map(m => (
               <div
                 key={m.id}
-                className="flex items-center justify-between p-2 rounded-lg bg-[#202c33]/50 hover:bg-[#202c33] transition"
+                onClick={() => onSelectMemberToEdit(m)}
+                className="group relative flex items-center justify-between p-2.5 rounded-xl bg-[#202c33]/60 hover:bg-[#202c33] border border-transparent hover:border-[#00a884]/40 transition cursor-pointer"
+                title={`Click to edit ${m.name}'s character`}
               >
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div
-                    className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 font-sans"
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 font-sans shadow"
                     style={{ backgroundColor: m.avatarColor }}
                   >
                     {m.name.charAt(0)}
                   </div>
                   <div className="min-w-0">
-                    <h4 className="text-xs font-semibold text-[#d1d7db] truncate font-sans">
+                    <h4 className="text-xs font-bold text-[#d1d7db] group-hover:text-white truncate font-sans flex items-center gap-1">
                       {m.name}
                     </h4>
                     <p className="text-[10px] text-[#8696a0] truncate font-sans">{m.roleTitle}</p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1">
-                  <Circle className="w-2 h-2 fill-[#00a884] text-[#00a884]" />
+                <div className="flex items-center gap-1 text-[#8696a0] group-hover:text-[#00a884] transition">
+                  <Edit3 className="w-3.5 h-3.5" />
                 </div>
               </div>
             ))}
