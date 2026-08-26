@@ -124,6 +124,104 @@ RETURN ONLY VALID JSON MATCHING THIS EXACT SCHEMA:
   }
 }
 
+export async function refineStudioWithPrompt(
+  currentSnippets: PatternSnippet[],
+  currentBpm: number,
+  userInstruction: string
+): Promise<{
+  bpm: number;
+  snippets: PatternSnippet[];
+  mainArrangementCode: string;
+} | null> {
+  const keyItem = apiKeyPool.getNextKey();
+  const startTime = Date.now();
+
+  const snippetsSummary = currentSnippets.map(s => ({
+    filename: s.filename,
+    category: s.category,
+    title: s.title,
+    strudelCode: s.strudelCode,
+    isActive: s.isActive
+  }));
+
+  const systemPrompt = `You are an AI Live-Coding Music Assistant.
+The user wants to iteratively update or add to their existing Strudel studio pattern snippets.
+Current Active Studio Snippets:
+${JSON.stringify(snippetsSummary, null, 2)}
+
+User Instruction: "${userInstruction.trim()}"
+
+INSTRUCTIONS:
+1. Update existing snippets or add new snippets (category: 'drums', 'bass', 'synth', 'pads', 'percussion') as requested by the user.
+2. Return the updated complete list of snippets in valid JSON.
+3. Return the updated 'mainArrangementCode' stacking all active snippets.
+
+RETURN ONLY VALID JSON MATCHING SCHEMA:
+{
+  "bpm": ${currentBpm},
+  "snippets": [
+    {
+      "filename": "drums/kick_basic.strudel",
+      "category": "drums",
+      "title": "Basic Kick & Snare",
+      "strudelCode": "s(\"bd sd [~ bd] sd\")",
+      "tags": ["kick"]
+    }
+  ],
+  "mainArrangementCode": "stack(s(\"bd sd\"), n(\"c2 e2\").s(\"sawtooth\"))"
+}`;
+
+  try {
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${keyItem.key}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: `Apply user instruction to refine studio snippets.` }
+        ],
+        temperature: 0.7,
+        max_tokens: 1000,
+        response_format: { type: 'json_object' }
+      })
+    });
+
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    apiKeyPool.reportSuccess(keyItem.id, Date.now() - startTime);
+
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) return null;
+
+    const parsed: GeneratedBatchJSON = JSON.parse(content);
+    const bpm = parsed.bpm || currentBpm;
+
+    const updatedSnippets: PatternSnippet[] = parsed.snippets.map((s, idx) => ({
+      id: `snip_refine_${Date.now()}_${idx}`,
+      filename: s.filename,
+      category: s.category || 'drums',
+      title: s.title,
+      strudelCode: s.strudelCode,
+      isActive: true,
+      bpm,
+      tags: s.tags || []
+    }));
+
+    return {
+      bpm,
+      snippets: updatedSnippets,
+      mainArrangementCode: parsed.mainArrangementCode || 'stack(s("bd sd"))'
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function modifyTargetSnippet(
   targetSnippet: PatternSnippet,
   userInstruction: string

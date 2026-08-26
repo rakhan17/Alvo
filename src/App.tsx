@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { StudioHeader } from './components/StudioHeader';
-import { ConceptGenerator } from './components/ConceptGenerator';
+import { CentralPromptBar } from './components/CentralPromptBar';
 import { SnippetGrid } from './components/SnippetGrid';
 import { MasterSequencer } from './components/MasterSequencer';
 import { TargetedCommandBar } from './components/TargetedCommandBar';
-import { PatternSnippet, MasterArrangement, StudioState } from './types/music';
-import { generateModularSnippetsBatch, modifyTargetSnippet } from './services/groqClient';
+import { PatternSnippet, MasterArrangement } from './types/music';
+import { generateModularSnippetsBatch, refineStudioWithPrompt, modifyTargetSnippet } from './services/groqClient';
 import { StrudelEngine } from './services/strudelEngine';
 
 const INITIAL_SNIPPETS: PatternSnippet[] = [
@@ -67,7 +67,6 @@ export function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [bpm, setBpm] = useState(120);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [isConceptModalOpen, setIsConceptModalOpen] = useState(false);
   const [selectedSnippetToModify, setSelectedSnippetToModify] = useState<PatternSnippet | null>(null);
 
   // Update Master Stack Code whenever active snippets change
@@ -111,17 +110,30 @@ export function App() {
     setSnippets(prev => prev.filter(s => s.id !== id));
   };
 
-  const handleGenerateBatch = async (newConcept: string) => {
+  // Main Prompt Submission (Handles both initial generation & continuous iterative edits!)
+  const handlePromptSubmit = async (promptText: string) => {
     setIsGenerating(true);
-    setConcept(newConcept);
+    setConcept(promptText);
 
-    const result = await generateModularSnippetsBatch(newConcept);
-    setIsGenerating(false);
+    if (snippets.length === 0) {
+      // First Generation
+      const result = await generateModularSnippetsBatch(promptText);
+      setIsGenerating(false);
 
-    if (result) {
-      setBpm(result.bpm);
-      setSnippets(result.snippets);
-      setMaster(result.master);
+      if (result) {
+        setBpm(result.bpm);
+        setSnippets(result.snippets);
+        setMaster(result.master);
+      }
+    } else {
+      // Continuous Iterative Refinement
+      const result = await refineStudioWithPrompt(snippets, bpm, promptText);
+      setIsGenerating(false);
+
+      if (result) {
+        setBpm(result.bpm);
+        setSnippets(result.snippets);
+      }
     }
   };
 
@@ -138,7 +150,7 @@ export function App() {
   return (
     <div className="min-h-screen w-screen bg-[#09090b] text-[#fafafa] flex flex-col font-sans overflow-x-hidden selection:bg-[#fafafa] selection:text-[#09090b]">
       
-      {/* 1. Header & Transport Bar */}
+      {/* 1. Studio Header & Master Transport Bar */}
       <StudioHeader
         concept={concept}
         isPlaying={isPlaying}
@@ -146,13 +158,19 @@ export function App() {
         snippetCount={snippets.length}
         onTogglePlay={handleTogglePlayMaster}
         onBpmChange={(newBpm) => setBpm(newBpm)}
-        onOpenConceptModal={() => setIsConceptModalOpen(true)}
+        onOpenConceptModal={() => {}}
       />
 
       {/* 2. Main Studio Workspace Layout */}
       <main className="flex-1 max-w-[1600px] w-full mx-auto p-4 md:p-6 space-y-6 flex flex-col">
         
-        {/* Top Master Sequencer Stack Panel */}
+        {/* Prominent Central AI Prompt Command Bar */}
+        <CentralPromptBar
+          isGenerating={isGenerating}
+          onPromptSubmit={handlePromptSubmit}
+        />
+
+        {/* Master Sequencer Stack Panel */}
         <MasterSequencer
           master={master}
           snippets={snippets}
@@ -174,15 +192,7 @@ export function App() {
 
       </main>
 
-      {/* 3. Concept Generator Modal */}
-      <ConceptGenerator
-        isOpen={isConceptModalOpen}
-        onClose={() => setIsConceptModalOpen(false)}
-        isGenerating={isGenerating}
-        onGenerateBatch={handleGenerateBatch}
-      />
-
-      {/* 4. Targeted AI Snippet Modifier Bar */}
+      {/* 3. Targeted AI Snippet Modifier Bar */}
       <TargetedCommandBar
         selectedSnippet={selectedSnippetToModify}
         onCloseSelected={() => setSelectedSnippetToModify(null)}
