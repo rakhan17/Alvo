@@ -1,145 +1,81 @@
-# ⚡ ALVO - Autonomous Proactive Terminal Companion AI
+# ⚔️ Groq AI Debate Arena
 
-> An intelligent, autonomous CLI AI companion that lives inside your terminal, observes your desktop context in real-time, and proactively offers advice, mentoring, wit, or encouragement.
+A real-time, multi-model AI debate web application powered by **Groq LLM Acceleration**. Multiple AI models with distinct personas engage in structured dialectical debates over user-defined motions, moderated by a third AI Referee with live word-by-word streaming text.
 
 ---
 
 ## 🌟 Key Features
 
-1. **Autonomous Proactive Evaluator Loop**:
-   - Runs in the background at configurable intervals (default: 20s).
-   - Monitors active macOS applications and window titles via `osascript`.
-   - Captures screen snapshots and downscales them with perceptual diff hashing to prevent unnecessary CPU/token consumption.
-   - Decides autonomously when a situation warrants a remark (e.g. noticing build errors, long debugging sessions, interesting tools, or slacking off).
-
-2. **Interactive React-Based Terminal UI (`ink`)**:
-   - **Live Status Header**: Real-time indicators (`WATCHING`, `THINKING`, `SPEAKING`, `IDLE`).
-   - **Main Chat Stream**: Highlights proactive remarks with timestamps and contextual previews.
-   - **Non-blocking Interactive Input Bar**: Chat with Alvo at any time while the background observer continues watching.
-
-3. **Modular LLM Providers**:
-   - **Local Ollama** (Default: `llama3.2:3b`, `llama3.2-vision:latest`, `qwen2.5-coder`, `mistral`, etc.).
-   - **Gemini API** (`gemini-1.5-flash`, `gemini-2.0-flash`).
-   - **OpenAI-Compatible API** (OpenAI, Groq, DeepSeek, LocalAI, LM Studio).
-
-4. **Rich Persona Presets**:
-   - `friend`: Chill, witty, supportive dev buddy (Indonesian / English mix).
-   - `mentor`: Principal Engineer / Tech Lead giving architectural guidance.
-   - `tsundere_partner`: Feisty, teasing, secretly caring partner.
-   - `casual_coder`: Minimalist, quiet, only alerts on critical terminal errors.
+1. **Multi-Model Groq Engine**:
+   - Assign different Groq LLM models (`llama-3.3-70b-versatile`, `llama-3.1-8b-instant`, `mixtral-8x7b-32768`, `gemma2-9b-it`) for Debater A, Debater B, and the Moderator.
+2. **Cyber Arena Split-Screen UI**:
+   - **Debater A (PRO)**: Left Panel with glowing Emerald active speaker aura.
+   - **Debater B (CONTRA)**: Right Panel with glowing Rose active speaker aura.
+   - **Moderator & Supreme Referee**: Top Center Panel with Opening Intro and Final Verdict Announcement.
+3. **Structured Multi-Round Loop**:
+   - Round 1: Moderator Opening -> Debater A Argument -> Debater B Counter.
+   - Round 2..N: Alternating Rebuttals & Counter-arguments.
+   - Verdict: Moderator analyzes logical clashes, fallacies, and declares the winner!
+4. **Real-Time Word Streaming**:
+   - Live word-by-word streaming output taking full advantage of Groq's high throughput.
+5. **Interactive Controls**:
+   - Full Start, Pause, Resume, Reset, and Arena Setup drawer.
 
 ---
 
-## 🚀 Quick Start
+## 📁 Recommended Directory Structure
+
+```text
+Alvo/
+├── .env.example
+├── .env                        # Local Groq API Key environment file
+├── src/
+│   ├── types/
+│   │   └── debate.ts           # Type definitions for Arena, Debaters, Rounds & Messages
+│   ├── services/
+│   │   ├── groqClient.ts       # Groq Multi-Model API Client with streaming & retry
+│   │   └── debateArenaEngine.ts# Real-time Arena Loop & Stream Event Emitter
+│   ├── components/
+│   │   ├── ArenaHeader.tsx     # Cyberpunk Header with status indicators
+│   │   ├── SetupPanel.tsx      # Motion input, Model selector, Persona prompts
+│   │   ├── ModeratorCard.tsx   # Top center Moderator card & final verdict
+│   │   ├── DebaterCard.tsx     # Split-screen Debater panel (Left PRO / Right CONTRA)
+│   │   └── ControlBar.tsx      # Play, Pause, Resume, Reset controls
+│   ├── App.tsx                 # Main Arena App integration
+│   └── index.css               # Cyber Arena Tailwind CSS styles & animations
+```
+
+---
+
+## 🚀 Step-by-Step Local Setup Instructions
 
 ### 1. Prerequisites
-- **Node.js** (v18+)
-- **macOS** (for active window and screen snapshot inspection)
-- **Ollama** installed locally (`ollama run llama3.2:3b` or `ollama run llama3.2-vision:latest`)
+- Node.js (v18+)
+- npm or yarn
 
-### 2. Installation & Build
-
+### 2. Configure Environment `.env`
+Create a `.env` file in the project root directory (or copy from `.env.example`):
 ```bash
-cd /Applications/Mind/Alvo
+cp .env.example .env
+```
+
+Add your Groq API Key from [console.groq.com/keys](https://console.groq.com/keys):
+```env
+VITE_GROQ_API_KEY=gsk_your_groq_api_key_here
+```
+
+### 3. Install Dependencies & Run Development Server
+```bash
 npm install
+npm run dev
+```
+
+Open your browser at `http://127.0.0.1:3000/`.
+
+---
+
+## 🛠️ Production Build
+To test and validate the production bundle:
+```bash
 npm run build
 ```
-
-### 3. Verify Your System (`doctor`)
-
-```bash
-npm run doctor
-# or
-node dist/cli.js doctor
-```
-
-Output:
-```
-🩺 Running ALVO System Doctor...
-
-1. OS Platform: ✔ macOS (arm64)
-2. Active Window Inspector: ✔ Success! Detected App: "Code" | Title: "Alvo — App.tsx"
-3. Screen Snapshot & Sharp Processing: ✔ Success! Captured & downscaled thumbnail
-4. LLM Provider (ollama -> llama3.2:3b): ✔ Connected to Ollama successfully!
-```
-
-### 4. Start Alvo
-
-```bash
-npm run start
-# or with a specific preset:
-node dist/cli.js start --preset mentor
-```
-
----
-
-## ⌨️ Interactive TUI Commands
-
-Inside the Alvo terminal session, you can type anytime or run slash commands:
-
-- `/scan` : Trigger an immediate screen & context evaluation cycle.
-- `/preset <name>` : Switch persona in real-time (`friend`, `mentor`, `tsundere_partner`, `casual_coder`).
-- `/clear` : Clear the chat feed history.
-- `/help` : Display help menu.
-- `/quit` (or `Ctrl+C`) : Exit cleanly.
-
----
-
-## ⚙️ Configuration
-
-### View & Update Config
-
-```bash
-# View current config
-node dist/cli.js config
-
-# Switch persona preset
-node dist/cli.js config --preset tsundere_partner
-
-# Switch model or provider
-node dist/cli.js config --provider ollama --model llama3.2:3b --interval 15
-
-# Use Gemini API
-node dist/cli.js config --provider gemini --model gemini-1.5-flash --api-key YOUR_GEMINI_API_KEY
-```
-
-### List Persona Presets
-
-```bash
-node dist/cli.js presets
-```
-
----
-
-## 📁 Architecture Overview
-
-```
-src/
-├── types/          # Universal data types & interfaces
-├── config/         # Zod schemas, defaults, and ConfigManager
-├── collector/      # macOS active window inspector & screen capturer
-│   ├── window.ts   # osascript active app and title detector
-│   ├── screen.ts   # screencapture + sharp downsampling & diff hash
-│   └── index.ts    # Composite snapshot orchestrator
-├── llm/            # Modular LLM Provider engine
-│   ├── ollama.ts   # Local Ollama client (JSON mode & vision)
-│   ├── gemini.ts   # Google GenAI REST client
-│   ├── openai.ts   # OpenAI-compatible API client
-│   └── factory.ts  # Provider factory
-├── evaluator/      # Proactive loop & prompt engine
-│   ├── prompts.ts  # System & user prompt builders
-│   └── loop.ts     # Anti-spam cooldown & event emitter loop
-├── ui/             # Interactive React Ink Terminal UI
-│   ├── components/
-│   │   ├── Header.tsx    # Live state badge & active window indicator
-│   │   ├── ChatFeed.tsx  # Formatted proactive remarks & conversation
-│   │   └── InputBar.tsx  # Non-blocking async input
-│   ├── App.tsx           # Ink root component
-│   └── index.tsx         # Terminal renderer lifecycle
-└── cli.ts          # Commander CLI entrypoint (start, config, doctor, presets)
-```
-
----
-
-## 🛡️ License
-MIT License
