@@ -1,107 +1,192 @@
-import { useEffect, useState, useRef } from 'react';
-import { ChronicleHeader } from './components/ChronicleHeader';
-import { WorldSetupModal } from './components/WorldSetupModal';
-import { NarrativeCanvas } from './components/NarrativeCanvas';
-import { ActionBar } from './components/ActionBar';
-import { CompanionDrawer } from './components/CompanionDrawer';
-import { ChronicleEngine } from './services/chronicleEngine';
-import { GameState, GenreSetting, PlayerCharacter } from './types/game';
+import { useEffect, useState } from 'react';
+import { StudioHeader } from './components/StudioHeader';
+import { ConceptGenerator } from './components/ConceptGenerator';
+import { SnippetGrid } from './components/SnippetGrid';
+import { MasterSequencer } from './components/MasterSequencer';
+import { TargetedCommandBar } from './components/TargetedCommandBar';
+import { PatternSnippet, MasterArrangement, StudioState } from './types/music';
+import { generateModularSnippetsBatch, modifyTargetSnippet } from './services/groqClient';
+import { StrudelEngine } from './services/strudelEngine';
 
-const INITIAL_CHARACTER: PlayerCharacter = {
-  name: 'Corvus',
-  classTitle: 'Wanderer',
-  health: 100,
-  maxHealth: 100,
-  will: 80,
-  maxWill: 80,
-  originStory: 'Exiled from the High Citadel after uncovering a forbidden seal.'
+const INITIAL_SNIPPETS: PatternSnippet[] = [
+  {
+    id: 'snip_1',
+    filename: 'drums/kick_basic.strudel',
+    category: 'drums',
+    title: 'Basic Kick & Snare Beat',
+    strudelCode: 's("bd sd [~ bd] sd")',
+    isActive: true,
+    bpm: 120,
+    tags: ['kick', 'snare', 'beat']
+  },
+  {
+    id: 'snip_2',
+    filename: 'drums/hihat_trap.strudel',
+    category: 'drums',
+    title: 'Fast Trap Hi-Hats',
+    strudelCode: 's("hh*8")',
+    isActive: true,
+    bpm: 120,
+    tags: ['hihat', 'percussion']
+  },
+  {
+    id: 'snip_3',
+    filename: 'bass/sub_funky.strudel',
+    category: 'bass',
+    title: 'Funky Sub Bassline',
+    strudelCode: 'n("c2 e2 g2 b2").s("sawtooth")',
+    isActive: true,
+    bpm: 120,
+    tags: ['bass', 'groovy']
+  },
+  {
+    id: 'snip_4',
+    filename: 'synth/arp_dreamy.strudel',
+    category: 'synth',
+    title: 'Dreamy Lead Arpeggio',
+    strudelCode: 'n("c4 e4 g4 b4").s("sine")',
+    isActive: true,
+    bpm: 120,
+    tags: ['arp', 'lead']
+  }
+];
+
+const INITIAL_MASTER: MasterArrangement = {
+  id: 'master_init',
+  filename: 'main.strudel',
+  title: 'Master Composition Stack',
+  strudelCode: StrudelEngine.buildMasterStackCode(INITIAL_SNIPPETS),
+  activeSnippetIds: INITIAL_SNIPPETS.map(s => s.id),
+  bpm: 120
 };
 
 export function App() {
-  const [gameState, setGameState] = useState<GameState | null>(null);
-  const [isSetupOpen, setIsSetupOpen] = useState(false);
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [concept, setConcept] = useState('Cyber-funk with punchy short drum loops and bouncy basslines');
+  const [snippets, setSnippets] = useState<PatternSnippet[]>(INITIAL_SNIPPETS);
+  const [master, setMaster] = useState<MasterArrangement>(INITIAL_MASTER);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [bpm, setBpm] = useState(120);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isConceptModalOpen, setIsConceptModalOpen] = useState(false);
+  const [selectedSnippetToModify, setSelectedSnippetToModify] = useState<PatternSnippet | null>(null);
 
-  const engineRef = useRef<ChronicleEngine | null>(null);
-
+  // Update Master Stack Code whenever active snippets change
   useEffect(() => {
-    engineRef.current = new ChronicleEngine('Dark Fantasy', INITIAL_CHARACTER);
+    const updatedCode = StrudelEngine.buildMasterStackCode(snippets);
+    setMaster(prev => ({
+      ...prev,
+      strudelCode: updatedCode,
+      activeSnippetIds: snippets.filter(s => s.isActive).map(s => s.id)
+    }));
 
-    const unsubscribe = engineRef.current.subscribe((state) => {
-      setGameState(state);
-    });
+    if (isPlaying) {
+      StrudelEngine.playMasterComposition(updatedCode, bpm);
+    }
+  }, [snippets, bpm]);
 
-    // Start Chapter 1 automatically
-    engineRef.current.startCampaign('Dark Fantasy', INITIAL_CHARACTER);
-
-    return () => {
-      unsubscribe();
-    };
-  }, []);
-
-  const handleStartCampaign = (setting: GenreSetting, character: PlayerCharacter) => {
-    setIsSetupOpen(false);
-    if (engineRef.current) {
-      engineRef.current.startCampaign(setting, character);
+  const handleTogglePlayMaster = () => {
+    if (isPlaying) {
+      StrudelEngine.stopPlayback();
+      setIsPlaying(false);
+    } else {
+      StrudelEngine.playMasterComposition(master.strudelCode, bpm);
+      setIsPlaying(true);
     }
   };
 
-  const handleTakeAction = (actionText: string) => {
-    if (engineRef.current) {
-      engineRef.current.takeTurn(actionText);
+  const handleToggleActiveSnippet = (id: string) => {
+    setSnippets(prev => prev.map(s => s.id === id ? { ...s, isActive: !s.isActive } : s));
+  };
+
+  const handlePlaySoloSnippet = (snippet: PatternSnippet) => {
+    setIsPlaying(false);
+    StrudelEngine.playSnippetSolo(snippet, bpm);
+  };
+
+  const handleUpdateSnippetCode = (id: string, newCode: string) => {
+    setSnippets(prev => prev.map(s => s.id === id ? { ...s, strudelCode: newCode } : s));
+  };
+
+  const handleDeleteSnippet = (id: string) => {
+    setSnippets(prev => prev.filter(s => s.id !== id));
+  };
+
+  const handleGenerateBatch = async (newConcept: string) => {
+    setIsGenerating(true);
+    setConcept(newConcept);
+
+    const result = await generateModularSnippetsBatch(newConcept);
+    setIsGenerating(false);
+
+    if (result) {
+      setBpm(result.bpm);
+      setSnippets(result.snippets);
+      setMaster(result.master);
     }
   };
 
-  if (!gameState) return null;
+  const handleModifyTargetSnippet = async (snippet: PatternSnippet, instruction: string) => {
+    setIsGenerating(true);
+    const updatedCode = await modifyTargetSnippet(snippet, instruction);
+    setIsGenerating(false);
+
+    if (updatedCode) {
+      handleUpdateSnippetCode(snippet.id, updatedCode);
+    }
+  };
 
   return (
-    <div className="h-screen w-screen bg-[#0d0d0f] text-[#e6e1d5] flex flex-col font-sans overflow-hidden select-none">
+    <div className="min-h-screen w-screen bg-[#09090b] text-[#fafafa] flex flex-col font-sans overflow-x-hidden selection:bg-[#fafafa] selection:text-[#09090b]">
       
-      {/* 1. High-End Editorial Top Header */}
-      <ChronicleHeader
-        settingName={gameState.setting}
-        characterName={gameState.character.name}
-        chapterCount={gameState.chapters.length}
-        mood={gameState.currentMood}
-        isDrawerOpen={isDrawerOpen}
-        onToggleDrawer={() => setIsDrawerOpen(!isDrawerOpen)}
-        onNewCampaign={() => setIsSetupOpen(true)}
+      {/* 1. Header & Transport Bar */}
+      <StudioHeader
+        concept={concept}
+        isPlaying={isPlaying}
+        bpm={bpm}
+        snippetCount={snippets.length}
+        onTogglePlay={handleTogglePlayMaster}
+        onBpmChange={(newBpm) => setBpm(newBpm)}
+        onOpenConceptModal={() => setIsConceptModalOpen(true)}
       />
 
-      {/* 2. Main Game Workspace */}
-      <div className="flex-1 flex overflow-hidden relative">
+      {/* 2. Main Studio Workspace Layout */}
+      <main className="flex-1 max-w-[1600px] w-full mx-auto p-4 md:p-6 space-y-6 flex flex-col">
         
-        {/* Centered Digital Novel Reading Canvas */}
-        <div className="flex-1 flex flex-col h-full overflow-hidden">
-          <NarrativeCanvas
-            chapters={gameState.chapters}
-            isGenerating={gameState.isGenerating}
-          />
+        {/* Top Master Sequencer Stack Panel */}
+        <MasterSequencer
+          master={master}
+          snippets={snippets}
+          isPlaying={isPlaying}
+          onPlayMaster={handleTogglePlayMaster}
+        />
 
-          {/* Bottom Action Bar (Free-form input + 3 Quick Action Chips) */}
-          <ActionBar
-            quickActions={gameState.quickActions}
-            isGenerating={gameState.isGenerating}
-            onTakeAction={handleTakeAction}
+        {/* Modular Snippets Library Grid View */}
+        <div className="flex-1">
+          <SnippetGrid
+            snippets={snippets}
+            onToggleActive={handleToggleActiveSnippet}
+            onPlaySolo={handlePlaySoloSnippet}
+            onUpdateCode={handleUpdateSnippetCode}
+            onDeleteSnippet={handleDeleteSnippet}
+            onSelectForEdit={(s) => setSelectedSnippetToModify(s)}
           />
         </div>
 
-        {/* 3. Collapsible Companion Drawer */}
-        <CompanionDrawer
-          isOpen={isDrawerOpen}
-          onClose={() => setIsDrawerOpen(false)}
-          character={gameState.character}
-          inventory={gameState.inventory}
-          quests={gameState.quests}
-          npcs={gameState.npcs}
-        />
+      </main>
 
-      </div>
+      {/* 3. Concept Generator Modal */}
+      <ConceptGenerator
+        isOpen={isConceptModalOpen}
+        onClose={() => setIsConceptModalOpen(false)}
+        isGenerating={isGenerating}
+        onGenerateBatch={handleGenerateBatch}
+      />
 
-      {/* 4. World Setup Modal */}
-      <WorldSetupModal
-        isOpen={isSetupOpen}
-        onStartCampaign={handleStartCampaign}
+      {/* 4. Targeted AI Snippet Modifier Bar */}
+      <TargetedCommandBar
+        selectedSnippet={selectedSnippetToModify}
+        onCloseSelected={() => setSelectedSnippetToModify(null)}
+        onModifySnippet={handleModifyTargetSnippet}
       />
 
     </div>
